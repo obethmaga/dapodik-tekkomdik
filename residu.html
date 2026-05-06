@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualisasi Data Residu Siswa - Wilayah IV</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- PapaParse untuk memproses file CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- jQuery (Dibutuhkan untuk Select2 dan DataTables) -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+
+    <!-- Select2 CSS & JS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <!-- DataTables CSS & JS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { height: 10px; width: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* --- Overrides Select2 agar cocok dengan Tailwind --- */
+        .select2-container--default .select2-selection--single {
+            height: 42px;
+            border-color: #c7d2fe; /* border-indigo-200 */
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            background-color: #ffffff;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 40px;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            color: #374151;
+            line-height: normal;
+            font-weight: 500;
+        }
+        .select2-container--default .select2-results__option--highlighted.select2-results__option--selectable {
+            background-color: #6366f1; /* bg-indigo-500 */
+        }
+
+        /* --- Overrides DataTables agar cocok dengan Tailwind --- */
+        table.dataTable {
+            border-collapse: collapse !important;
+        }
+        table.dataTable thead th, table.dataTable thead td {
+            border-bottom: 2px solid #e5e7eb !important;
+            color: #374151;
+        }
+        table.dataTable.no-footer {
+            border-bottom: 1px solid #e5e7eb !important;
+        }
+        .dataTables_wrapper .dataTables_length select, 
+        .dataTables_wrapper .dataTables_filter input {
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            padding: 0.25rem 0.5rem;
+            margin-left: 0.5rem;
+            outline: none;
+            background-color: #f9fafb;
+        }
+        .dataTables_wrapper .dataTables_length select:focus, 
+        .dataTables_wrapper .dataTables_filter input:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 1px #6366f1;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current, 
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+            background: #e0e7ff !important; /* bg-indigo-100 */
+            border-color: #c7d2fe !important;
+            color: #4f46e5 !important; /* text-indigo-600 */
+            border-radius: 0.375rem;
+        }
+        .dataTables_wrapper .dataTables_info, .dataTables_wrapper .dataTables_paginate {
+            margin-top: 1rem !important;
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="min-h-screen p-6 md:p-10">
+        <!-- Header -->
+        <div class="max-w-6xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 mb-6">
+            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+                <div class="flex-1">
+                    <h1 class="text-2xl md:text-3xl font-bold text-gray-900">Visualisasi Data Residu Siswa</h1>
+                    <p class="text-gray-500 mt-1">Menampilkan proporsi kategori residu siswa pada <span class="font-semibold text-indigo-600">Wilayah IV</span>.</p>
+                    <p id="file-name" class="text-sm font-medium text-amber-600 mt-3 bg-amber-50 inline-block px-3 py-1 rounded-full border border-amber-100">Sedang Menampilkan Data Sampel</p>
+                </div>
+                
+                <div class="w-full lg:w-auto flex flex-col gap-3 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <!-- Input URL Google Sheets -->
+                    <div class="flex w-full md:w-80 shadow-sm">
+                        <input type="url" id="gsheet-url" placeholder="Paste Link CSV Google Sheets..." class="flex-grow rounded-l-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 w-full">
+                        <button id="load-url-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-r-lg text-sm font-medium transition-colors whitespace-nowrap">
+                            Muat Link
+                        </button>
+                    </div>
+                    
+                    <div class="flex items-center justify-center gap-2">
+                        <div class="h-px bg-gray-300 flex-grow"></div>
+                        <span class="text-xs text-gray-400 font-medium uppercase">Atau</span>
+                        <div class="h-px bg-gray-300 flex-grow"></div>
+                    </div>
+
+                    <!-- Tombol Upload File Lokal -->
+                    <label for="csv-upload" class="cursor-pointer bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 font-medium py-2 px-4 rounded-lg flex items-center justify-center transition-colors shadow-sm text-sm w-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        Unggah File CSV Lokal
+                    </label>
+                    <input type="file" id="csv-upload" accept=".csv" class="hidden">
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 1: Total Keseluruhan (Bar Chart - Tanpa Filter) -->
+        <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            
+            <!-- Bar Chart Section -->
+            <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 text-center">Total Distribusi Kategori Residu (Keseluruhan)</h2>
+                <div class="relative flex-grow flex items-center justify-center min-h-[400px]">
+                    <canvas id="mainBarChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Rincian Data Section -->
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Total Residu per Kategori</h2>
+                <div id="data-summary" class="flex-grow flex flex-col gap-3 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
+                    <!-- Rincian card akan di-generate oleh JS -->
+                </div>
+                
+                <div class="mt-4 pt-4 border-t border-gray-100">
+                    <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
+                        <span class="font-bold text-gray-700">Total Keseluruhan</span>
+                        <span id="grand-total" class="font-bold text-indigo-600 text-xl">0</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- SECTION 2: Rincian per Sekolah (Pie Chart + Tabel - Dengan Filter) -->
+        <div class="max-w-6xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            
+            <!-- Header & Filter (Menggunakan Select2) -->
+            <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 border-b border-gray-100 pb-4">
+                <h2 class="text-xl font-bold text-gray-800 text-center md:text-left">Rincian Kategori Residu per Sekolah</h2>
+                
+                <div class="flex items-center gap-3 w-full md:w-auto bg-indigo-50 p-2 px-4 rounded-xl border border-indigo-100">
+                    <label for="school-filter" class="font-semibold text-indigo-800 whitespace-nowrap">Cari Sekolah:</label>
+                    <div class="w-full md:w-80">
+                        <select id="school-filter" class="w-full">
+                            <!-- Opsi sekolah akan di-generate oleh JS -->
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pie Chart Container (Dipengaruhi Filter) -->
+            <div class="relative w-full flex justify-center pb-8">
+                <div class="h-[350px] w-full max-w-lg" id="pieChartContainer">
+                    <canvas id="schoolPieChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Tabel Data Sekolah (Menggunakan DataTables) -->
+            <div class="mt-8 border-t border-gray-100 pt-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">Rincian Semua Sekolah</h3>
+                <div class="overflow-x-auto custom-scrollbar pb-4">
+                    <!-- Ditambahkan class 'display' dan 'nowrap' standar DataTables -->
+                    <table id="schoolTable" class="display w-full text-left text-sm text-gray-600" style="width:100%">
+                        <thead class="bg-gray-50 text-gray-700 font-medium border-b border-gray-200">
+                            <tr>
+                                <th class="px-4 py-3 whitespace-nowrap">No</th>
+                                <th class="px-4 py-3 whitespace-nowrap">Nama Sekolah</th>
+                                <th class="px-4 py-3 text-right whitespace-nowrap">Rombel</th>
+                                <th class="px-4 py-3 text-right whitespace-nowrap">NISN</th>
+                                <th class="px-4 py-3 text-right whitespace-nowrap">NIK Dukcapil</th>
+                                <th class="px-4 py-3 text-right whitespace-nowrap">NIK Ganda</th>
+                                <th class="px-4 py-3 text-right whitespace-nowrap">Nama</th>
+                                <th class="px-4 py-3 text-right whitespace-nowrap">Tempat Lahir</th>
+                                <th class="px-4 py-3 text-right whitespace-nowrap">Tanggal Lahir</th>
+                                <th class="px-4 py-3 text-right whitespace-nowrap">Ibu Kandung</th>
+                                <th class="px-4 py-3 text-right whitespace-nowrap">Desa/Kelurahan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Baris tabel akan di-generate oleh DataTables via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // Data Sampel dari cuplikan (digunakan saat file belum diunggah)
+        const sampleCsvData = `Nama,Jenjang,Status,Kecamatan,Kabupaten,Rombel/Sekolah,NISN,NIK Dukcapil,NIK Ganda,Nama,Tempat Lahir,Tanggal Lahir,Ibu Kandung,Desa/Kelurahan,Jumlah Entitas
+(50302954) SMAN 1 AIMERE,SMA,Negeri,Kec. Aimere,Kab. Ngada,0,0,0,2,2,0,0,0,0,4
+(50306182) SMKN 1 AIMERE,SMK,Negeri,Kec. Aimere,Kab. Ngada,4,0,5,1,14,9,9,10,2,54
+(50302956) SMAN 1 BAJAWA,SMA,Negeri,Kec. Bajawa,Kab. Ngada,1,0,3,1,22,6,7,5,8,53
+(69947184) SMAN 2 BAJAWA,SMA,Negeri,Kec. Bajawa,Kab. Ngada,0,0,0,0,1,0,0,0,0,1
+(50302958) SMAS REGINA PACIS BAJAWA,SMA,Swasta,Kec. Bajawa,Kab. Ngada,1,0,0,1,5,0,0,0,0,7
+(50304773) SMAS SANTU KLAUS WERANG,SMA,Swasta,Kec. Sano Nggoang,Kab. Manggarai Barat,0,0,0,0,3,3,2,3,0,11
+(69726058) SMAN 2 SATAR MESE LANGKE MAJOK,SMA,Negeri,Kec. Satar Mese Barat,Kab. Manggarai,0,0,0,0,11,5,6,6,3,31
+(70024103) SMK NEGERI 1 SATARMESE,SMK,Negeri,Kec. Satar Mese Barat,Kab. Manggarai,0,0,0,1,4,0,0,0,0,5
+(50303447) SMAN 1 SATARMESE,SMA,Negeri,Kec. Satarmese,Kab. Manggarai,0,0,1,1,18,9,3,5,0,37
+(69726059) SMAN 3 SATAR MESE,SMA,Negeri,Kec. Satarmese,Kab. Manggarai,0,0,0,0,1,0,0,0,0,1
+(50307940) SMAS ST MARIA ITENG,SMA,Swasta,Kec. Satarmese,Kab. Manggarai,0,0,1,0,1,0,0,0,0,2`;
+
+        // Kategori yang ingin ditampilkan
+        const labels = ['Rombel', 'NISN', 'NIK Dukcapil', 'NIK Ganda', 'Nama', 'Tempat Lahir', 'Tanggal Lahir', 'Ibu Kandung', 'Desa/Kelurahan'];
+        
+        // Konfigurasi Warna untuk Chart
+        const colors = [
+            { bg: 'rgba(239, 68, 68, 0.8)', border: 'rgb(239, 68, 68)', text: 'text-red-500', bgLight: 'bg-red-50' },     // Red
+            { bg: 'rgba(59, 130, 246, 0.8)', border: 'rgb(59, 130, 246)', text: 'text-blue-500', bgLight: 'bg-blue-50' },   // Blue
+            { bg: 'rgba(16, 185, 129, 0.8)', border: 'rgb(16, 185, 129)', text: 'text-emerald-500', bgLight: 'bg-emerald-50' },// Green
+            { bg: 'rgba(245, 158, 11, 0.8)', border: 'rgb(245, 158, 11)', text: 'text-amber-500', bgLight: 'bg-amber-50' },   // Yellow
+            { bg: 'rgba(139, 92, 246, 0.8)', border: 'rgb(139, 92, 246)', text: 'text-violet-500', bgLight: 'bg-violet-50' }, // Purple
+            { bg: 'rgba(236, 72, 153, 0.8)', border: 'rgb(236, 72, 153)', text: 'text-pink-500', bgLight: 'bg-pink-50' },     // Pink
+            { bg: 'rgba(20, 184, 166, 0.8)', border: 'rgb(20, 184, 166)', text: 'text-teal-500', bgLight: 'bg-teal-50' },     // Teal
+            { bg: 'rgba(249, 115, 22, 0.8)', border: 'rgb(249, 115, 22)', text: 'text-orange-500', bgLight: 'bg-orange-50' }, // Orange
+            { bg: 'rgba(99, 102, 241, 0.8)', border: 'rgb(99, 102, 241)', text: 'text-indigo-500', bgLight: 'bg-indigo-50' }  // Indigo
+        ];
+
+        let barChartInstance = null;
+        let pieChartInstance = null;
+        let dataTableInstance = null;
+        let globalSchoolMap = new Map();
+
+        // Inisialisasi awal saat dokumen dimuat (jQuery Document Ready)
+        $(document).ready(function() {
+            // Inisialisasi Select2
+            $('#school-filter').select2({
+                placeholder: "Pilih atau cari sekolah...",
+                allowClear: false
+            });
+
+            // Listener Select2 (Saat pilihan berubah)
+            $('#school-filter').on('select2:select', function (e) {
+                updatePieChart(e.params.data.id);
+            });
+
+            // Parsing data sampel
+            Papa.parse(sampleCsvData, {
+                complete: function(results) {
+                    processInitialData(results.data);
+                }
+            });
+        });
+
+        // Fungsi mengatur status loading/info
+        function setStatus(message, isError = false, isSuccess = false) {
+            const statusEl = document.getElementById('file-name');
+            statusEl.innerHTML = message;
+            statusEl.className = "text-sm font-medium mt-3 inline-block px-3 py-1 rounded-full border";
+            
+            if (isError) {
+                statusEl.classList.add("text-red-600", "bg-red-50", "border-red-100");
+            } else if (isSuccess) {
+                statusEl.classList.add("text-emerald-600", "bg-emerald-50", "border-emerald-100");
+            } else {
+                statusEl.classList.add("text-blue-600", "bg-blue-50", "border-blue-100");
+            }
+        }
+
+        // Fungsi memproses Array Data CSV awal
+        function processInitialData(csvArray) {
+            let totalsAll = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+            globalSchoolMap.clear();
+
+            for (let i = 1; i < csvArray.length; i++) {
+                const row = csvArray[i];
+                if (row.length >= 15 && row[0].trim() !== '') {
+                    const schoolName = row[0];
+                    const cats = [
+                        parseInt(row[5]) || 0,  // Rombel
+                        parseInt(row[6]) || 0,  // NISN
+                        parseInt(row[7]) || 0,  // NIK Dukcapil
+                        parseInt(row[8]) || 0,  // NIK Ganda
+                        parseInt(row[9]) || 0,  // Nama
+                        parseInt(row[10]) || 0, // Tempat Lahir
+                        parseInt(row[11]) || 0, // Tanggal Lahir
+                        parseInt(row[12]) || 0, // Ibu Kandung
+                        parseInt(row[13]) || 0  // Desa/Kelurahan
+                    ];
+                    const totalResidu = parseInt(row[14]) || 0;
+
+                    for(let j=0; j<9; j++) {
+                        totalsAll[j] += cats[j];
+                    }
+
+                    globalSchoolMap.set(schoolName, {
+                        total: totalResidu,
+                        categories: cats
+                    });
+                }
+            }
+
+            // 1. Render Chart Atas
+            renderTopSection(totalsAll);
+
+            // 2. Siapkan Dropdown Filter (Select2)
+            const $schoolFilter = $('#school-filter');
+            $schoolFilter.empty(); // Bersihkan opsi lama
+            
+            const alphaSchools = Array.from(globalSchoolMap.keys()).sort();
+            alphaSchools.forEach(school => {
+                const option = new Option(school, school, false, false);
+                $schoolFilter.append(option);
+            });
+            $schoolFilter.trigger('change'); // Refresh UI select2
+
+            // 3. Render Pie Chart untuk sekolah pertama
+            if(alphaSchools.length > 0) {
+                updatePieChart(alphaSchools[0]);
+            }
+
+            // 4. Render DataTables
+            const sortedSchools = Array.from(globalSchoolMap.entries()).sort((a, b) => b[1].total - a[1].total);
+            renderTableDataTables(sortedSchools);
+        }
+
+        // --- Render SECTION 1 (Keseluruhan) ---
+        function renderTopSection(totals) {
+            const ctx = document.getElementById('mainBarChart').getContext('2d');
+            if (barChartInstance) barChartInstance.destroy();
+
+            barChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Jumlah Data',
+                        data: totals,
+                        backgroundColor: colors.map(c => c.bg),
+                        borderColor: colors.map(c => c.border),
+                        borderWidth: 1,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: { label: context => context.parsed.y + ' Data' },
+                            bodyFont: { family: "'Inter', sans-serif", size: 14 },
+                            padding: 12, boxPadding: 6
+                        }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { font: { family: "'Inter', sans-serif" } } },
+                        x: { ticks: { font: { family: "'Inter', sans-serif" } } }
+                    }
+                }
+            });
+
+            const summaryContainer = document.getElementById('data-summary');
+            summaryContainer.innerHTML = '';
+            let grandTotal = 0;
+
+            labels.forEach((label, index) => {
+                const count = totals[index];
+                grandTotal += count;
+                
+                const card = document.createElement('div');
+                card.className = `flex justify-between items-center p-3 rounded-lg border border-gray-50 ${colors[index].bgLight}`;
+                card.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="w-4 h-4 rounded-full" style="background-color: ${colors[index].border}"></div>
+                        <span class="font-medium text-gray-700">${label}</span>
+                    </div>
+                    <span class="font-bold ${colors[index].text}">${count}</span>
+                `;
+                summaryContainer.appendChild(card);
+            });
+
+            document.getElementById('grand-total').textContent = grandTotal;
+        }
+
+        // --- Render SECTION 2 (Pie Chart) ---
+        function updatePieChart(schoolName) {
+            const schoolData = globalSchoolMap.get(schoolName);
+            if (!schoolData) return;
+
+            const totals = schoolData.categories;
+            const isDataEmpty = totals.every(val => val === 0);
+
+            const ctx = document.getElementById('schoolPieChart').getContext('2d');
+            if (pieChartInstance) pieChartInstance.destroy();
+
+            pieChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: isDataEmpty ? [1] : totals,
+                        backgroundColor: isDataEmpty ? ['#e5e7eb'] : colors.map(c => c.bg),
+                        borderColor: isDataEmpty ? ['#e5e7eb'] : colors.map(c => c.border),
+                        borderWidth: 1,
+                        hoverOffset: isDataEmpty ? 0 : 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            display: !isDataEmpty,
+                            labels: { font: { family: "'Inter', sans-serif", size: 13 }, padding: 20 }
+                        },
+                        tooltip: {
+                            enabled: !isDataEmpty,
+                            callbacks: { label: context => ' ' + context.label + ': ' + context.parsed + ' Data' },
+                            bodyFont: { family: "'Inter', sans-serif", size: 14 },
+                            padding: 12, boxPadding: 6
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- Render Tabel dengan DataTables ---
+        function renderTableDataTables(sortedSchools) {
+            // Memformat data agar sesuai dengan format array 2D yang dibutuhkan DataTables
+            const tableData = sortedSchools.map((item, index) => {
+                const schoolName = item[0];
+                const cats = item[1].categories;
+                return [
+                    index + 1,        // No
+                    schoolName,       // Nama Sekolah
+                    cats[0],          // Rombel
+                    cats[1],          // NISN
+                    cats[2],          // NIK Dukcapil
+                    cats[3],          // NIK Ganda
+                    cats[4],          // Nama
+                    cats[5],          // Tempat Lahir
+                    cats[6],          // Tanggal Lahir
+                    cats[7],          // Ibu Kandung
+                    cats[8]           // Desa/Kelurahan
+                ];
+            });
+
+            // Jika DataTables sudah diinisialisasi sebelumnya, update datanya saja
+            if ($.fn.DataTable.isDataTable('#schoolTable')) {
+                dataTableInstance.clear();
+                dataTableInstance.rows.add(tableData);
+                dataTableInstance.draw();
+            } else {
+                // Inisialisasi DataTables untuk pertama kali
+                dataTableInstance = $('#schoolTable').DataTable({
+                    data: tableData,
+                    pageLength: 10,
+                    language: {
+                        // Terjemahan Bahasa Indonesia untuk DataTables
+                        search: "Cari Data:",
+                        lengthMenu: "Tampilkan _MENU_ baris",
+                        info: "Menampilkan _START_ sampai _END_ dari _TOTAL_ sekolah",
+                        infoEmpty: "Menampilkan 0 sampai 0 dari 0 sekolah",
+                        infoFiltered: "(disaring dari _MAX_ total sekolah)",
+                        paginate: {
+                            first: "Awal",
+                            last: "Akhir",
+                            next: "Selanjutnya",
+                            previous: "Sebelumnya"
+                        },
+                        emptyTable: "Tidak ada data yang tersedia"
+                    },
+                    columnDefs: [
+                        { className: "text-center", targets: [0] }, // Kolom No rata tengah
+                        { className: "font-medium text-gray-800", targets: [1] }, // Kolom Nama Sekolah tebal
+                        { className: "text-right", targets: [2,3,4,5,6,7,8,9,10] } // Kolom angka rata kanan
+                    ]
+                });
+            }
+        }
+
+        // --- Event Listener Tombol URL Google Sheets ---
+        document.getElementById('load-url-btn').addEventListener('click', function() {
+            const url = document.getElementById('gsheet-url').value.trim();
+            if (!url) { setStatus("Mohon masukkan Link/URL terlebih dahulu.", true); return; }
+
+            setStatus("Sedang mengunduh dan memproses data dari Link...");
+
+            Papa.parse(url, {
+                download: true,
+                complete: function(results) {
+                    processInitialData(results.data);
+                    setStatus("Menampilkan Data dari: Link Google Sheets", false, true);
+                },
+                error: function(err) {
+                    console.error("Gagal mem-parsing URL CSV:", err);
+                    setStatus("Gagal memuat. Pastikan URL benar, disetting 'Publik', dan format CSV.", true);
+                }
+            });
+        });
+
+        // --- Event Listener Tombol File Upload CSV Lokal ---
+        document.getElementById('csv-upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                setStatus(`Memproses file: ${file.name}...`);
+                
+                Papa.parse(file, {
+                    complete: function(results) {
+                        processInitialData(results.data);
+                        setStatus(`Menampilkan Data dari File: ${file.name}`, false, true);
+                    },
+                    error: function(err) {
+                        console.error("Gagal mem-parsing file CSV:", err);
+                        setStatus("Gagal membaca file CSV. Pastikan formatnya benar.", true);
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
